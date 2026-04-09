@@ -107,6 +107,22 @@ function App() {
     () => new Set(expiringSoonAlerts.map((a) => a.id)),
     [expiringSoonAlerts],
   );
+  // input validation
+  const validateForm = () => {
+    if (form.price < 0) {
+      setError("Price cannot be negative");
+      return false;
+    }
+    if (form.quantity < 0) {
+      setError("Quantity cannot be negative");
+      return false;
+    }
+    if (new Date(form.expiry_date) < new Date()) {
+      setError("Expiry date cannot be in the past");
+      return false;
+    }
+    return true;
+  };
 
   // Derived list with filter and sorting
   const filteredMedicines = useMemo(() => {
@@ -202,6 +218,12 @@ function App() {
     setLoading(true);
     setMessage("");
     setError("");
+
+    if (!validateForm()) {
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       ...form,
       price: Number(form.price),
