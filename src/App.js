@@ -16,6 +16,17 @@ const useAutoTimeout = (value, setValue, delayMs = 5000) => {
   }, [value, setValue, delayMs]);
 };
 
+const useDebounce = (value, delayMs = 300) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+
+  return debouncedValue;
+};
+
 function App() {
   const [medicines, setMedicines] = useState([]);
   const [form, setForm] = useState({
@@ -47,6 +58,7 @@ function App() {
   // Auto-dismiss messages and errors
   useAutoTimeout(message, setMessage);
   useAutoTimeout(error, setError);
+  const debouncedFilter = useDebounce(filter);
 
   // Fetch all medicines
   const fetchMedicine = async () => {
@@ -129,7 +141,7 @@ function App() {
     let filtered = medicines;
 
     // Apply filter
-    const q = filter.trim().toLowerCase();
+    const q = debouncedFilter.trim().toLowerCase();
     if (q) {
       filtered = medicines.filter(
         (medicine) =>
@@ -174,7 +186,7 @@ function App() {
     });
   }, [
     medicines,
-    filter,
+    debouncedFilter,
     sortField,
     sortDirection,
     lowStockIds,
