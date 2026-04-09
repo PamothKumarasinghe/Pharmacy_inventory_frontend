@@ -303,6 +303,13 @@ function App() {
   const currency = (n) =>
     typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
 
+  const getRowClass = (id) => {
+    if (expiredIds.has(id)) return "row-expired";
+    if (lowStockIds.has(id)) return "row-low-stock";
+    if (expiringSoonIds.has(id)) return "row-expiring-soon";
+    return "";
+  };
+
   return (
     <div className="app-bg">
       <header className="topbar">
@@ -491,15 +498,7 @@ function App() {
                     {filteredMedicines.map((medicine) => (
                       <tr
                         key={medicine.id}
-                        className={
-                          expiredIds.has(medicine.id)
-                            ? "row-expired"
-                            : lowStockIds.has(medicine.id)
-                              ? "row-low-stock"
-                              : expiringSoonIds.has(medicine.id)
-                                ? "row-expiring-soon"
-                                : ""
-                        }
+                        className={getRowClass(medicine.id)}
                       >
                         <td>{medicine.id}</td>
                         <td className="name-cell">{medicine.name}</td>
