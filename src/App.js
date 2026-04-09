@@ -6,6 +6,16 @@ const api = axios.create({
   baseURL: "http://localhost:8000",
 });
 
+// Custom hook for auto-dismiss messages/errors
+const useAutoTimeout = (value, setValue, delayMs = 5000) => {
+  useEffect(() => {
+    if (value) {
+      const timer = setTimeout(() => setValue(""), delayMs);
+      return () => clearTimeout(timer);
+    }
+  }, [value, setValue, delayMs]);
+};
+
 function App() {
   const [medicines, setMedicines] = useState([]);
   const [form, setForm] = useState({
@@ -34,24 +44,9 @@ function App() {
   // alert filter
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Auto-dismiss messages after 5 seconds
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+  // Auto-dismiss messages and errors
+  useAutoTimeout(message, setMessage);
+  useAutoTimeout(error, setError);
 
   // Fetch all medicines
   const fetchMedicine = async () => {
@@ -266,37 +261,22 @@ function App() {
     setLoading(false);
   };
 
-  // Low stock medicine alert
-  const fetchLowStockAlerts = async () => {
+  // Generic alert fetch function
+  const fetchAlerts = async (endpoint, setState, params = {}) => {
     try {
-      const res = await api.get("/medicines/alerts/low-stock");
-      setLowStockAlerts(res.data?.alerts || []);
-    } catch (err) {
-      console.error("Failed to fetch low stock alerts");
-    }
-  };
-
-  // Expired medicine alert
-  const fetchExpiredAlerts = async () => {
-    try {
-      const res = await api.get("/medicines/alerts/expired");
-      setExpiredAlerts(res.data?.alerts || []);
-    } catch (err) {
-      console.error("Failed to fetch expired alerts");
-    }
-  };
-
-  // Expiring soon medicine alert
-  const fetchExpiringSoonAlerts = async () => {
-    try {
-      const res = await api.get("/medicines/alerts/expiring-soon", {
-        params: { days: 30 },
+      const res = await api.get(`/medicines/alerts/${endpoint}`, {
+        params,
       });
-      setExpiringSoonAlerts(res.data?.alerts || []);
+      setState(res.data?.alerts || []);
     } catch (err) {
-      console.error("Failed to fetch expiring soon alerts");
+      console.error(`Failed to fetch ${endpoint} alerts`);
     }
   };
+
+  const fetchLowStockAlerts = () => fetchAlerts("low-stock", setLowStockAlerts);
+  const fetchExpiredAlerts = () => fetchAlerts("expired", setExpiredAlerts);
+  const fetchExpiringSoonAlerts = () =>
+    fetchAlerts("expiring-soon", setExpiringSoonAlerts, { days: 30 });
 
   const currency = (n) =>
     typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
