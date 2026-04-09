@@ -6,6 +6,27 @@ const api = axios.create({
   baseURL: "http://localhost:8000",
 });
 
+// Custom hook for auto-dismiss messages/errors
+const useAutoTimeout = (value, setValue, delayMs = 5000) => {
+  useEffect(() => {
+    if (value) {
+      const timer = setTimeout(() => setValue(""), delayMs);
+      return () => clearTimeout(timer);
+    }
+  }, [value, setValue, delayMs]);
+};
+
+const useDebounce = (value, delayMs = 300) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+
+  return debouncedValue;
+};
+
 function App() {
   const [medicines, setMedicines] = useState([]);
   const [form, setForm] = useState({
@@ -34,24 +55,10 @@ function App() {
   // alert filter
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Auto-dismiss messages after 5 seconds
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+  // Auto-dismiss messages and errors
+  useAutoTimeout(message, setMessage);
+  useAutoTimeout(error, setError);
+  const debouncedFilter = useDebounce(filter);
 
   // Fetch all medicines
   const fetchMedicine = async () => {
@@ -112,13 +119,29 @@ function App() {
     () => new Set(expiringSoonAlerts.map((a) => a.id)),
     [expiringSoonAlerts],
   );
+  // input validation
+  const validateForm = () => {
+    if (form.price < 0) {
+      setError("Price cannot be negative");
+      return false;
+    }
+    if (form.quantity < 0) {
+      setError("Quantity cannot be negative");
+      return false;
+    }
+    if (new Date(form.expiry_date) < new Date()) {
+      setError("Expiry date cannot be in the past");
+      return false;
+    }
+    return true;
+  };
 
   // Derived list with filter and sorting
   const filteredMedicines = useMemo(() => {
     let filtered = medicines;
 
     // Apply filter
-    const q = filter.trim().toLowerCase();
+    const q = debouncedFilter.trim().toLowerCase();
     if (q) {
       filtered = medicines.filter(
         (medicine) =>
@@ -163,7 +186,7 @@ function App() {
     });
   }, [
     medicines,
-    filter,
+    debouncedFilter,
     sortField,
     sortDirection,
     lowStockIds,
@@ -207,6 +230,12 @@ function App() {
     setLoading(true);
     setMessage("");
     setError("");
+
+    if (!validateForm()) {
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       ...form,
       price: Number(form.price),
@@ -266,40 +295,32 @@ function App() {
     setLoading(false);
   };
 
-  // Low stock medicine alert
-  const fetchLowStockAlerts = async () => {
+  // Generic alert fetch function
+  const fetchAlerts = async (endpoint, setState, params = {}) => {
     try {
-      const res = await api.get("/medicines/alerts/low-stock");
-      setLowStockAlerts(res.data?.alerts || []);
-    } catch (err) {
-      console.error("Failed to fetch low stock alerts");
-    }
-  };
-
-  // Expired medicine alert
-  const fetchExpiredAlerts = async () => {
-    try {
-      const res = await api.get("/medicines/alerts/expired");
-      setExpiredAlerts(res.data?.alerts || []);
-    } catch (err) {
-      console.error("Failed to fetch expired alerts");
-    }
-  };
-
-  // Expiring soon medicine alert
-  const fetchExpiringSoonAlerts = async () => {
-    try {
-      const res = await api.get("/medicines/alerts/expiring-soon", {
-        params: { days: 30 },
+      const res = await api.get(`/medicines/alerts/${endpoint}`, {
+        params,
       });
-      setExpiringSoonAlerts(res.data?.alerts || []);
+      setState(res.data?.alerts || []);
     } catch (err) {
-      console.error("Failed to fetch expiring soon alerts");
+      console.error(`Failed to fetch ${endpoint} alerts`);
     }
   };
+
+  const fetchLowStockAlerts = () => fetchAlerts("low-stock", setLowStockAlerts);
+  const fetchExpiredAlerts = () => fetchAlerts("expired", setExpiredAlerts);
+  const fetchExpiringSoonAlerts = () =>
+    fetchAlerts("expiring-soon", setExpiringSoonAlerts, { days: 30 });
 
   const currency = (n) =>
     typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
+
+  const getRowClass = (id) => {
+    if (expiredIds.has(id)) return "row-expired";
+    if (lowStockIds.has(id)) return "row-low-stock";
+    if (expiringSoonIds.has(id)) return "row-expiring-soon";
+    return "";
+  };
 
   return (
     <div className="app-bg">
@@ -489,15 +510,7 @@ function App() {
                     {filteredMedicines.map((medicine) => (
                       <tr
                         key={medicine.id}
-                        className={
-                          expiredIds.has(medicine.id)
-                            ? "row-expired"
-                            : lowStockIds.has(medicine.id)
-                              ? "row-low-stock"
-                              : expiringSoonIds.has(medicine.id)
-                                ? "row-expiring-soon"
-                                : ""
-                        }
+                        className={getRowClass(medicine.id)}
                       >
                         <td>{medicine.id}</td>
                         <td className="name-cell">{medicine.name}</td>
