@@ -16,6 +16,7 @@
   --text-700: #58486f;
   --text-500: #756884;
   --line: rgba(132, 88, 179, 0.24);
+  --search-input-width: 340px;
 }
 
 body {
@@ -92,7 +93,7 @@ body {
 }
 
 .search input {
-  width: 340px;
+  width: var(--search-input-width);
   max-width: 100%;
   padding: 11px 14px;
   border-radius: 12px;

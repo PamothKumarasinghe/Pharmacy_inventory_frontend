@@ -6,8 +6,11 @@ const api = axios.create({
   baseURL: "http://localhost:8000",
 });
 
+const MESSAGE_DISMISS_DELAY = 5000;
+const DEFAULT_EXPIRING_DAYS = 30;
+
 // Custom hook for auto-dismiss messages/errors
-const useAutoTimeout = (value, setValue, delayMs = 5000) => {
+const useAutoTimeout = (value, setValue, delayMs = MESSAGE_DISMISS_DELAY) => {
   useEffect(() => {
     if (value) {
       const timer = setTimeout(() => setValue(""), delayMs);
@@ -56,8 +59,8 @@ function App() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Auto-dismiss messages and errors
-  useAutoTimeout(message, setMessage);
-  useAutoTimeout(error, setError);
+  useAutoTimeout(message, setMessage, MESSAGE_DISMISS_DELAY);
+  useAutoTimeout(error, setError, MESSAGE_DISMISS_DELAY);
   const debouncedFilter = useDebounce(filter);
 
   // Fetch all medicines
@@ -365,7 +368,9 @@ function App() {
   const fetchLowStockAlerts = () => fetchAlerts("low-stock", setLowStockAlerts);
   const fetchExpiredAlerts = () => fetchAlerts("expired", setExpiredAlerts);
   const fetchExpiringSoonAlerts = () =>
-    fetchAlerts("expiring-soon", setExpiringSoonAlerts, { days: 30 });
+    fetchAlerts("expiring-soon", setExpiringSoonAlerts, {
+      days: DEFAULT_EXPIRING_DAYS,
+    });
 
   const currency = (n) =>
     typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
@@ -522,7 +527,7 @@ function App() {
                 <p>{expiredAlerts.length} medicines</p>
               </div>
               <div className="alert-card alert-soon">
-                <h4>Expiring Soon (30 days)</h4>
+                <h4>Expiring Soon ({DEFAULT_EXPIRING_DAYS} days)</h4>
                 <p>{expiringSoonAlerts.length} medicines</p>
               </div>
             </div>
