@@ -74,8 +74,12 @@ function App() {
   };
 
   const refreshAllData = async () => {
+    await Promise.all([fetchMedicine(), refreshAlerts()]);
+  };
+
+  // refresh all alerts - created due to avoid refreshAllMedicines after every update/ create
+  const refreshAlerts = async () => {
     await Promise.all([
-      fetchMedicine(),
       fetchLowStockAlerts(),
       fetchExpiredAlerts(),
       fetchExpiringSoonAlerts(),
@@ -94,6 +98,14 @@ function App() {
     };
     run();
   }, []);
+
+  const syncMedicinesFallback = async () => {
+    try {
+      await fetchMedicine();
+    } catch (err) {
+      setError("Failed to sync medicines");
+    }
+  };
 
   // Handle sorting
   const handleSort = (field) => {
@@ -129,8 +141,12 @@ function App() {
       setError("Quantity cannot be negative");
       return false;
     }
-    if (new Date(form.expiry_date) < new Date()) {
-      setError("Expiry date cannot be in the past");
+    const expiryDate = new Date(form.expiry_date);
+    const today = new Date();
+    expiryDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    if (expiryDate <= today) {
+      setError("Expiry date must be after today");
       return false;
     }
     return true;
@@ -243,19 +259,48 @@ function App() {
       min_stock: Number(form.min_stock || 0),
       expiry_date: form.expiry_date,
     };
+
     try {
       if (editId) {
-        await api.put(`/medicines/${editId}`, payload);
+        const res = await api.put(`/medicines/${editId}`, payload);
+        const updatedMedicine = res.data?.medicine;
+
+        if (updatedMedicine) {
+          setMedicines((prev) =>
+            prev.map((m) =>
+              m.id === updatedMedicine.id ? updatedMedicine : m,
+            ),
+          );
+        } else {
+          await syncMedicinesFallback();
+        }
         setMessage("Medicine updated successfully");
       } else {
-        await api.post("/medicines/", payload);
+        const res = await api.post("/medicines/", payload);
+        const createdMedicine = res.data?.medicine;
+
+        if (createdMedicine) {
+          setMedicines((prev) => [createdMedicine, ...prev]);
+        } else {
+          await syncMedicinesFallback();
+        }
         setMessage("Medicine created successfully");
       }
+
+      try {
+        await refreshAlerts();
+      } catch (alertErr) {
+        console.error("Mutation succeeded but alert refresh failed", alertErr);
+        setError(
+          "Saved successfully, but failed to refresh alerts. Click Refresh.",
+        );
+      }
+
       resetForm();
-      await refreshAllData();
     } catch (err) {
       setError(formatApiError(err));
     }
+
     setLoading(false);
   };
 
@@ -287,11 +332,21 @@ function App() {
     setError("");
     try {
       await api.delete(`/medicines/${medicine_id}`);
+      setMedicines((prev) => prev.filter((m) => m.id !== medicine_id));
       setMessage("Medicine deleted successfully");
-      await refreshAllData();
+      try {
+        await refreshAlerts();
+      } catch (alertErr) {
+        console.error("Delete succeeded but alert refresh failed", alertErr);
+        setError(
+          "Deleted successfully, but failed to refresh alerts. Click Refresh.",
+        );
+      }
     } catch (err) {
+      await syncMedicinesFallback();
       setError("Delete failed");
     }
+
     setLoading(false);
   };
 
