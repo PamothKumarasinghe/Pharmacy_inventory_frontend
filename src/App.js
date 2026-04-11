@@ -42,6 +42,7 @@ function App() {
     min_stock: "10",
     expiry_date: "",
   });
+
   const [editId, setEditId] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -58,17 +59,31 @@ function App() {
   // alert filter
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // pagination system
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalMedicines, setTotalMedicines] = useState(0);
+
   // Auto-dismiss messages and errors
   useAutoTimeout(message, setMessage, MESSAGE_DISMISS_DELAY);
   useAutoTimeout(error, setError, MESSAGE_DISMISS_DELAY);
   const debouncedFilter = useDebounce(filter);
 
   // Fetch all medicines
-  const fetchMedicine = async () => {
+  const fetchMedicine = async (
+    currentPage = page,
+    currentPageSize = pageSize,
+  ) => {
     setLoading(true);
     try {
-      const res = await api.get("/medicines/");
-      setMedicines(res.data);
+      const res = await api.get("/medicines/", {
+        params: {
+          skip: (currentPage - 1) * currentPageSize,
+          limit: currentPageSize,
+        },
+      });
+      setMedicines(res.data.items || []);
+      setTotalMedicines(res.data.total || 0);
       setError("");
     } catch (err) {
       setError("Failed to fetch medicines");
@@ -77,7 +92,7 @@ function App() {
   };
 
   const refreshAllData = async () => {
-    await Promise.all([fetchMedicine(), refreshAlerts()]);
+    await Promise.all([fetchMedicine(page, pageSize), refreshAlerts()]);
   };
 
   // refresh all alerts - created due to avoid refreshAllMedicines after every update/ create
@@ -90,17 +105,17 @@ function App() {
   };
 
   useEffect(() => {
-    // Inline initial fetch to avoid referencing external deps
-    const run = async () => {
-      try {
-        await refreshAllData();
-        setError("");
-      } catch (err) {
-        setError("Failed to fetch medicines");
-      }
-    };
-    run();
+    fetchMedicine(page, pageSize);
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    refreshAlerts();
   }, []);
+
+  // Reset to first page when filter or status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [filter, statusFilter]);
 
   const syncMedicinesFallback = async () => {
     try {
@@ -266,29 +281,13 @@ function App() {
     try {
       if (editId) {
         const res = await api.put(`/medicines/${editId}`, payload);
-        const updatedMedicine = res.data?.medicine;
-
-        if (updatedMedicine) {
-          setMedicines((prev) =>
-            prev.map((m) =>
-              m.id === updatedMedicine.id ? updatedMedicine : m,
-            ),
-          );
-        } else {
-          await syncMedicinesFallback();
-        }
         setMessage("Medicine updated successfully");
       } else {
         const res = await api.post("/medicines/", payload);
-        const createdMedicine = res.data?.medicine;
-
-        if (createdMedicine) {
-          setMedicines((prev) => [createdMedicine, ...prev]);
-        } else {
-          await syncMedicinesFallback();
-        }
         setMessage("Medicine created successfully");
       }
+
+      await fetchMedicine(page, pageSize);
 
       try {
         await refreshAlerts();
@@ -335,8 +334,21 @@ function App() {
     setError("");
     try {
       await api.delete(`/medicines/${medicine_id}`);
-      setMedicines((prev) => prev.filter((m) => m.id !== medicine_id));
       setMessage("Medicine deleted successfully");
+
+      const nextTotal = Math.max(totalMedicines - 1, 0);
+      const totalPagesAfterDelete = Math.max(
+        1,
+        Math.ceil(nextTotal / pageSize),
+      );
+      const nextPage = Math.min(page, totalPagesAfterDelete);
+
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await fetchMedicine(nextPage, pageSize);
+      }
+
       try {
         await refreshAlerts();
       } catch (alertErr) {
@@ -402,7 +414,7 @@ function App() {
 
       <div className="container">
         <div className="stats">
-          <div className="chip">Total: {medicines.length}</div>
+          <div className="chip">Total: {totalMedicines}</div>
           <div className="search">
             <input
               type="text"
@@ -614,6 +626,49 @@ function App() {
                 </table>
               </div>
             )}
+            <div className="pagination-bar">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                disabled={page === 1 || loading}
+              >
+                Previous
+              </button>
+
+              <span className="page-info">
+                Page {page} of{" "}
+                {Math.max(1, Math.ceil(totalMedicines / pageSize))}
+              </span>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() =>
+                  setPage((prev) => {
+                    const totalPages = Math.ceil(totalMedicines / pageSize);
+                    return Math.min(prev + 1, totalPages);
+                  })
+                }
+                disabled={
+                  page >= Math.ceil(totalMedicines / pageSize) || loading
+                }
+              >
+                Next
+              </button>
+
+              <select
+                className="page-size-select"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={5}>5 / page</option>
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>

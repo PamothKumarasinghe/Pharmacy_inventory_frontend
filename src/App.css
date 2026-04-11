@@ -131,6 +131,7 @@ body {
   align-items: start;
 }
 
+
 @media (max-width: 900px) {
   .content-grid {
     grid-template-columns: 1fr;
@@ -227,6 +228,27 @@ body {
   display: flex;
   gap: 10px;
   grid-column: 1 / -1;
+}
+/* Pagination */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 16px 0 0;
+  flex-wrap: wrap;
+}
+
+.page-info {
+  font-weight: 700;
+  color: var(--text-700);
+}
+
+.page-size-select {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
 }
 
 /* Buttons */
