@@ -524,7 +524,6 @@ function App() {
 
         <div className="content-grid">
           <div className="card list-card">
-            <h2>Medicines</h2>
             {loading ? (
               <div className="loader">Loading...</div>
             ) : (
@@ -795,7 +794,7 @@ function App() {
                 </div>
 
                 <div className="form-group">
-                  <label>Date</label>
+                  <label>Expiration Date</label>
                   <input
                     type="date"
                     name="expiry_date"
