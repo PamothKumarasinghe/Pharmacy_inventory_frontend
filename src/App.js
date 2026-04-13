@@ -63,6 +63,7 @@ function App() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalMedicines, setTotalMedicines] = useState(0);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   // Auto-dismiss messages and errors
   useAutoTimeout(message, setMessage, MESSAGE_DISMISS_DELAY);
@@ -136,7 +137,8 @@ function App() {
   };
 
   const lowStockIds = useMemo(
-    () => new Set(lowStockAlerts.map((a) => a.id)),
+    () =>
+      new Set(lowStockAlerts.filter((a) => a.quantity > 0).map((a) => a.id)),
     [lowStockAlerts],
   );
 
@@ -299,6 +301,7 @@ function App() {
       }
 
       resetForm();
+      setIsFormModalOpen(false);
     } catch (err) {
       setError(formatApiError(err));
     }
@@ -321,6 +324,7 @@ function App() {
         : "",
     });
     setEditId(medicine.id);
+    setIsFormModalOpen(true);
     setMessage("");
     setError("");
   };
@@ -387,6 +391,34 @@ function App() {
   const currency = (n) =>
     typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
 
+  const handleAddItemClick = () => {
+    resetForm();
+    setIsFormModalOpen(true);
+  };
+
+  const closeFormModal = () => {
+    setIsFormModalOpen(false);
+    resetForm();
+    setMessage("");
+    setError("");
+  };
+
+  const getMedicineStatus = (medicine) => {
+    if (medicine.quantity <= 0) return "Out of Stock";
+    if (expiredIds.has(medicine.id)) return "Expired";
+    if (lowStockIds.has(medicine.id)) return "Low Stock";
+    if (expiringSoonIds.has(medicine.id)) return "Expiring Soon";
+    return "Normal";
+  };
+
+  const getStatusClass = (medicine) => {
+    if (medicine.quantity <= 0) return "status-out";
+    if (expiredIds.has(medicine.id)) return "status-expired";
+    if (lowStockIds.has(medicine.id)) return "status-low";
+    if (expiringSoonIds.has(medicine.id)) return "status-expiring";
+    return "status-normal";
+  };
+
   const getRowClass = (id) => {
     if (expiredIds.has(id)) return "row-expired";
     if (lowStockIds.has(id)) return "row-low-stock";
@@ -399,7 +431,7 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-badge">📦</span>
-          <h1>Telusko Trac</h1>
+          <h1>Pharmacy Inventory</h1>
         </div>
         <div className="top-actions">
           <button
@@ -413,136 +445,86 @@ function App() {
       </header>
 
       <div className="container">
-        <div className="stats">
-          <div className="chip">Total: {totalMedicines}</div>
-          <div className="search">
-            <input
-              type="text"
-              placeholder="Search by id, name or description..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <div className="metric-label">Total Items</div>
+            <div className="metric-value">{totalMedicines}</div>
           </div>
-          <div className="status-filter">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+          <div className="metric-card">
+            <div className="metric-label">Low Stock</div>
+            <div className="metric-value warning">
+              {lowStockAlerts.filter((a) => a.quantity > 0).length}
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Expiring Soon</div>
+            <div className="metric-value warning">
+              {expiringSoonAlerts.length}
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Expired</div>
+            <div className="metric-value danger">{expiredAlerts.length}</div>
+          </div>
+        </div>
+
+        <div className="toolbar-card">
+          <div className="toolbar-top">
+            <div className="search">
+              <input
+                type="text"
+                placeholder="Search medications..."
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-add-item"
+              type="button"
+              onClick={handleAddItemClick}
             >
-              <option value="all">All Medicines</option>
-              <option value="expired">Expired</option>
-              <option value="low_stock">Low Stock</option>
-              <option value="expiring_soon">Expiring Soon</option>
-            </select>
+              + Add Item
+            </button>
+          </div>
+          <div
+            className="filter-tabs"
+            role="tablist"
+            aria-label="Inventory filters"
+          >
+            <button
+              type="button"
+              className={`filter-tab ${statusFilter === "all" ? "active" : ""}`}
+              onClick={() => setStatusFilter("all")}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={`filter-tab ${statusFilter === "low_stock" ? "active" : ""}`}
+              onClick={() => setStatusFilter("low_stock")}
+            >
+              Low Stock
+            </button>
+            <button
+              type="button"
+              className={`filter-tab ${statusFilter === "expiring_soon" ? "active" : ""}`}
+              onClick={() => setStatusFilter("expiring_soon")}
+            >
+              Expiring Soon
+            </button>
+            <button
+              type="button"
+              className={`filter-tab ${statusFilter === "expired" ? "active" : ""}`}
+              onClick={() => setStatusFilter("expired")}
+            >
+              Expired
+            </button>
           </div>
         </div>
 
         <div className="content-grid">
-          <div className="card form-card">
-            <h2>{editId ? "Edit Medicine" : "Add Medicine"}</h2>
-            <form onSubmit={handleSubmit} className="medicine-form">
-              <input
-                type="text"
-                name="name"
-                placeholder="Name"
-                value={form.name}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="text"
-                name="description"
-                placeholder="Description"
-                value={form.description}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="text"
-                name="category"
-                placeholder="Category"
-                value={form.category}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="text"
-                name="batch_no"
-                placeholder="Batch Number"
-                value={form.batch_no}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="number"
-                name="price"
-                placeholder="Price"
-                value={form.price}
-                onChange={handleChange}
-                required
-                step="0.01"
-              />
-              <input
-                type="number"
-                name="quantity"
-                placeholder="Quantity"
-                value={form.quantity}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="number"
-                name="min_stock"
-                placeholder="Minimum Stock"
-                value={form.min_stock}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="date"
-                name="expiry_date"
-                value={form.expiry_date}
-                onChange={handleChange}
-                required
-              />
-              <div className="form-actions">
-                <button className="btn" type="submit" disabled={loading}>
-                  {editId ? "Update" : "Add"}
-                </button>
-                {editId && (
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      resetForm();
-                      setMessage("");
-                      setError("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-            {message && <div className="success-msg">{message}</div>}
-            {error && <div className="error-msg">{error}</div>}
-          </div>
-
           <div className="card list-card">
             <h2>Medicines</h2>
-            <div className="alerts-grid">
-              <div className="alert-card alert-low">
-                <h4>Low Stock</h4>
-                <p>{lowStockAlerts.length} medicines</p>
-              </div>
-              <div className="alert-card alert-expired">
-                <h4>Expired</h4>
-                <p>{expiredAlerts.length} medicines</p>
-              </div>
-              <div className="alert-card alert-soon">
-                <h4>Expiring Soon ({DEFAULT_EXPIRING_DAYS} days)</h4>
-                <p>{expiringSoonAlerts.length} medicines</p>
-              </div>
-            </div>
             {loading ? (
               <div className="loader">Loading...</div>
             ) : (
@@ -551,30 +533,22 @@ function App() {
                   <thead>
                     <tr>
                       <th
-                        className={`sortable ${sortField === "id" ? `sort-${sortDirection}` : ""}`}
-                        onClick={() => handleSort("id")}
-                      >
-                        ID
-                      </th>
-                      <th
                         className={`sortable ${sortField === "name" ? `sort-${sortDirection}` : ""}`}
                         onClick={() => handleSort("name")}
                       >
-                        Name
+                        Medication
                       </th>
-                      <th
-                        className={`sortable ${sortField === "price" ? `sort-${sortDirection}` : ""}`}
-                        onClick={() => handleSort("price")}
-                      >
-                        Price
-                      </th>
+                      <th>Category</th>
                       <th
                         className={`sortable ${sortField === "quantity" ? `sort-${sortDirection}` : ""}`}
                         onClick={() => handleSort("quantity")}
                       >
                         Quantity
                       </th>
-                      <th>Expiration Date</th>
+                      <th>Min Stock</th>
+                      <th>Expiration</th>
+                      <th>Batch</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -584,32 +558,86 @@ function App() {
                         key={medicine.id}
                         className={getRowClass(medicine.id)}
                       >
-                        <td>{medicine.id}</td>
-                        <td className="name-cell">{medicine.name}</td>
-                        <td className="price-cell">
-                          ${currency(medicine.price)}
+                        <td className="name-cell text-sm text-neutral-900">
+                          {medicine.name}
                         </td>
-                        <td>
-                          <span className="qty-badge">{medicine.quantity}</span>
+                        <td className="text-sm text-neutral-900">
+                          {medicine.category}
                         </td>
-                        <td>
+                        <td className="text-sm text-neutral-900">
+                          <span
+                            className={
+                              medicine.quantity < medicine.min_stock
+                                ? "text-amber-600"
+                                : "text-neutral-900"
+                            }
+                          >
+                            {medicine.quantity}
+                          </span>
+                        </td>
+                        <td className="text-sm text-neutral-900">
+                          {medicine.min_stock}
+                        </td>
+                        <td className="text-sm text-neutral-900">
                           {medicine.expiry_date
-                            ? String(medicine.expiry_date).slice(0, 10)
+                            ? String(medicine.expiry_date)
+                                .slice(0, 10)
+                                .replaceAll("-", "/")
                             : "N/A"}
+                        </td>
+                        <td className="text-sm text-neutral-600">
+                          {medicine.batch_no}
+                        </td>
+                        <td>
+                          <span
+                            className={`status-badge ${getStatusClass(medicine)}`}
+                          >
+                            {getMedicineStatus(medicine)}
+                          </span>
                         </td>
                         <td>
                           <div className="row-actions">
                             <button
-                              className="btn btn-edit"
+                              className="btn btn-edit action-icon"
                               onClick={() => handleEdit(medicine)}
+                              aria-label="Edit medicine"
+                              title="Edit"
                             >
-                              Edit
+                              <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path
+                                  d="M15.232 5.232l3.536 3.536M16.732 3.732a2.121 2.121 0 113 3L7 19.5l-4 1 1-4 12.732-12.768z"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
                             </button>
                             <button
-                              className="btn btn-delete"
+                              className="btn btn-delete action-icon"
                               onClick={() => handleDelete(medicine.id)}
+                              aria-label="Delete medicine"
+                              title="Delete"
                             >
-                              Delete
+                              <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path
+                                  d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
                             </button>
                           </div>
                         </td>
@@ -617,7 +645,7 @@ function App() {
                     ))}
                     {filteredMedicines.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="empty">
+                        <td colSpan={8} className="empty">
                           No medicines found.
                         </td>
                       </tr>
@@ -671,6 +699,131 @@ function App() {
             </div>
           </div>
         </div>
+
+        {isFormModalOpen && (
+          <div className="modal-backdrop" onClick={closeFormModal}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>{editId ? "Edit Item" : "Add New Item"}</h3>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={closeFormModal}
+                  aria-label="Close form"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="modal-form-grid">
+                <div className="form-group field-span-2">
+                  <label>Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group field-span-2">
+                  <label>Description</label>
+                  <input
+                    type="text"
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Category</label>
+                  <input
+                    type="text"
+                    name="category"
+                    value={form.category}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Batch Number</label>
+                  <input
+                    type="text"
+                    name="batch_no"
+                    value={form.batch_no}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Price</label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={form.price}
+                    onChange={handleChange}
+                    required
+                    step="0.01"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Quantity</label>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={form.quantity}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Min Stock</label>
+                  <input
+                    type="number"
+                    name="min_stock"
+                    value={form.min_stock}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    name="expiry_date"
+                    value={form.expiry_date}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="modal-actions field-span-2">
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    onClick={closeFormModal}
+                  >
+                    Cancel
+                  </button>
+                  <button className="btn" type="submit" disabled={loading}>
+                    {editId ? "Update Item" : "Add Item"}
+                  </button>
+                </div>
+              </form>
+
+              {message && <div className="success-msg">{message}</div>}
+              {error && <div className="error-msg">{error}</div>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
